@@ -10,7 +10,7 @@ SUPABASE_URL = "https://lnlqplkchjobbkbcbfaq.supabase.co"
 
 # The ANON KEY is like a 'public key'. It allows the app to talk to Supabase.
 # It is safe to use in frontend apps because we use Row Level Security (RLS) to protect data.
-SUPABASE_KEY = "YOUR_ANON_PUBLIC_KEY"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxubHFwbGtjaGpvYmJrYmNiZmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNDEwMTQsImV4cCI6MjA4MTYxNzAxNH0.YiViz0eQfPNEVK-ZtLt0rjtgqCYkp5fsZVfMFTptm8s"
 
 # We initialize the 'client'. Think of this as the 'bridge' between your Python code and the Cloud.
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -170,3 +170,4 @@ elif choice == "Logout":
     # Clears the JWT token from the application memory.
     supabase.auth.sign_out()
     st.info("You have been securely logged out.")
+
