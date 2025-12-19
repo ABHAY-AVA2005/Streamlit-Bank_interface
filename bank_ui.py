@@ -5,74 +5,126 @@ from supabase import create_client, Client
 URL = "https://lnlqplkchjobbkbcbfaq.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxubHFwbGtjaGpvYmJrYmNiZmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNDEwMTQsImV4cCI6MjA4MTYxNzAxNH0.YiViz0eQfPNEVK-ZtLt0rjtgqCYkp5fsZVfMFTptm8s"
 
+import streamlit as st
+from supabase import create_client, Client
+import random
+import pandas as pd
+
+# --- CONNECT TO SUPABASE ---
+URL = "https://lnlqplkchjobbkbcbfaq.supabase.co"
+KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxubHFwbGtjaGpvYmJrYmNiZmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNDEwMTQsImV4cCI6MjA4MTYxNzAxNH0.YiViz0eQfPNEVK-ZtLt0rjtgqCYkp5fsZVfMFTptm8s"
+
 supabase: Client = create_client(URL, KEY)
 
-st.title("🏦 Vivnovation Bank App")
+st.title("🏦 Vivnovation Bank System")
 
-# --- APP MEMORY ---
+# --- SESSION STATE (App Memory) ---
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# --- SIDEBAR ---
+# --- SIDEBAR MENU ---
+# We add "View Users" to the menu options
 if st.session_state.user:
-    menu = ["Dashboard", "Logout"]
+    menu = ["Dashboard", "View Users", "Logout"]
 else:
     menu = ["Signup", "Login"]
 choice = st.sidebar.selectbox("Menu", menu)
 
-# --- SIGNUP ---
+# ==========================================
+# LOGIN & SIGNUP MODULES
+# ==========================================
 if choice == "Signup":
-    st.subheader("New User Registration")
-    email = st.text_input("Email")
-    password = st.text_input("Password (min 6 chars)", type="password")
-    
+    st.subheader("Register Credentials")
+    e = st.text_input("Email")
+    p = st.text_input("Password", type="password")
     if st.button("Register"):
-        try:
-            # This line sends the data to Supabase
-            res = supabase.auth.sign_up({"email": email, "password": password})
-            if res.user:
-                st.success(f"Account created for {email}! Now go to Login.")
-            else:
-                st.error("Signup failed. Check your Supabase logs.")
-        except Exception as e:
-            st.error(f"Signup Error: {e}")
+        supabase.auth.sign_up({"email": e, "password": p})
+        st.success("Credentials saved! Now Login.")
 
-# --- LOGIN ---
 elif choice == "Login":
-    st.subheader("Login to your Bank")
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
-    
+    st.subheader("User Login")
+    e = st.text_input("Email")
+    p = st.text_input("Password", type="password")
     if st.button("Login"):
         try:
-            # This checks the cloud for your email/password
-            res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+            res = supabase.auth.sign_in_with_password({"email": e, "password": p})
             st.session_state.user = res.user
-            st.success("Login Successful!")
             st.rerun()
-        except Exception as e:
-            st.error(f"Login Failed: {e}")
+        except:
+            st.error("Invalid Login")
 
-# --- DASHBOARD ---
+# ==========================================
+# DASHBOARD: INDIVIDUAL PROFILE
+# ==========================================
 elif choice == "Dashboard":
     user_id = st.session_state.user.id
-    # Fetch from our table
     res = supabase.table("bank_accounts").select("*").eq("user_id", user_id).execute()
     
     if not res.data:
-        st.info("Complete your profile setup")
-        name = st.text_input("Full Name")
-        if st.button("Create Profile"):
-            # This creates your starting balance of 500
-            supabase.table("bank_accounts").insert({"user_id": user_id, "name": name, "balance": 500}).execute()
-            st.success("Profile Created!")
-            st.rerun()
+        st.subheader("👤 Register User Details")
+        with st.form("user_details_form", clear_on_submit=True):
+            name = st.text_input("Full Name")
+            age = st.number_input("Age", min_value=1, step=1)
+            balance = st.number_input("Opening Balance", min_value=500)
+            save_btn = st.form_submit_button("Save Details")
+            
+            if save_btn:
+                if age < 18:
+                    st.error("Error: Age must be 18 or above.")
+                elif name == "":
+                    st.warning("Please enter your name.")
+                else:
+                    generated_acc = f"VIV-{random.randint(100000, 999999)}"
+                    supabase.table("bank_accounts").insert({
+                        "user_id": user_id, "name": name, "age": int(age),
+                        "account_number": generated_acc, "balance": balance
+                    }).execute()
+                    st.success("Details Saved Successfully!")
+                    st.rerun()
     else:
-        acc = res.data[0]
-        st.write(f"### Welcome, {acc['name']}")
-        st.metric("Balance", f"₹ {acc['balance']}")
-        # (Deposit/Withdraw buttons go here...)
+        user_info = res.data[0]
+        st.subheader("🏠 My Bank Profile")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info(f"**Name:** {user_info['name']}")
+            st.info(f"**Age:** {user_info['age']}")
+        with col2:
+            st.info(f"**Account No:** {user_info['account_number']}")
+            st.info(f"**Status:** Verified")
+        st.metric("Total Balance", f"₹ {user_info['balance']}")
 
+# ==========================================
+# VIEW USERS: ADMIN VIEW
+# ==========================================
+elif choice == "View Users":
+    st.subheader("📋 Registered Bank Users")
+    
+    # Logic: Fetch ALL rows from the bank_accounts table
+    response = supabase.table("bank_accounts").select("name, age, account_number, balance, created_at").execute()
+    
+    if response.data:
+        # Convert the data into a Pandas DataFrame for a better table view
+        df = pd.DataFrame(response.data)
+        
+        # Rename columns for a professional look
+        df.columns = ["Name", "Age", "Account Number", "Balance (₹)", "Date Joined"]
+        
+        # Display the table
+        st.dataframe(df, use_container_width=True)
+        
+        # Summary Metrics
+        total_users = len(df)
+        total_vault = df["Balance (₹)"].sum()
+        
+        c1, c2 = st.columns(2)
+        c1.metric("Total Customers", total_users)
+        c2.metric("Total Bank Deposits", f"₹ {total_vault}")
+    else:
+        st.warning("No users found in the database.")
+
+# ==========================================
+# LOGOUT
+# ==========================================
 elif choice == "Logout":
     st.session_state.user = None
     st.rerun()
