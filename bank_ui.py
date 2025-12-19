@@ -2,172 +2,183 @@ import streamlit as st
 from supabase import create_client, Client
 
 # ============================================================
-# 1. INITIALIZATION & CONFIGURATION
+# 1. GLOBAL CONFIGURATION & API CONNECTIVITY
 # ============================================================
 
-# The URL tells the code WHERE your database is hosted on the cloud.
+# The URL is the unique cloud endpoint for your specific Supabase project.
 SUPABASE_URL = "https://lnlqplkchjobbkbcbfaq.supabase.co"
 
-# The ANON KEY is like a 'public key'. It allows the app to talk to Supabase.
-# It is safe to use in frontend apps because we use Row Level Security (RLS) to protect data.
+# The ANON KEY is the 'Public API Key'. 
+# It allows the frontend to interact with the database under the protection 
+# of Row Level Security (RLS) policies.
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxubHFwbGtjaGpvYmJrYmNiZmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNDEwMTQsImV4cCI6MjA4MTYxNzAxNH0.YiViz0eQfPNEVK-ZtLt0rjtgqCYkp5fsZVfMFTptm8s"
 
-# We initialize the 'client'. Think of this as the 'bridge' between your Python code and the Cloud.
+# We initialize the Supabase Client. This object acts as the gateway 
+# for all Authentication and Database commands.
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Basic Streamlit UI configuration
-st.set_page_config(page_title="Secure Bank Prototype", layout="centered")
-st.title("🏦 Vivnovation Bank System")
+# Configuring the UI layout to be centered and professional.
+st.set_page_config(page_title="Vivnovation Bank Prototype", layout="centered")
+
+# --- PERSISTENT STATE MANAGEMENT ---
+# Why: Streamlit reruns the whole script on every interaction.
+# Without 'session_state', the app would 'forget' who is logged in 
+# the moment you click a button.
+if "user_token" not in st.session_state:
+    st.session_state.user_token = None  # Stores the User ID (UUID) once logged in
+
+st.title("🏦 Vivnovation Bank Management")
+st.markdown("---")
 
 # ============================================================
-# 2. AUTHENTICATION LOGIC (Managing Users)
+# 2. LOGIC FUNCTIONS (BACKEND OPERATIONS)
 # ============================================================
 
-def signup_user(email, password):
+def handle_signup(email, password):
     """
-    Registers a user in the 'auth.users' table in Supabase.
-    Supabase handles password hashing automatically (very secure).
+    Communicates with Supabase Auth.
+    - Sends email/password over HTTPS.
+    - Supabase hashes the password (standard security).
+    - Returns a user object if successful.
     """
     return supabase.auth.sign_up({"email": email, "password": password})
 
-def login_user(email, password):
+def handle_login(email, password):
     """
-    Checks credentials against 'auth.users'.
-    If correct, it returns a JWT (JSON Web Token).
-    This token is stored inside the 'supabase' client object.
+    Verifies credentials with Supabase.
+    - If valid, Supabase returns a 'Session' containing a JWT.
+    - This session allows us to retrieve the unique User ID.
     """
     return supabase.auth.sign_in_with_password({"email": email, "password": password})
 
-def get_current_user():
-    """
-    This function checks if the user is still 'authenticated'.
-    It essentially looks for the JWT token.
-    """
-    return supabase.auth.get_user()
-
 # ============================================================
-# 3. UI NAVIGATION (Sidebar)
+# 3. DYNAMIC SIDEBAR NAVIGATION
 # ============================================================
 
-menu = ["Signup", "Login", "Dashboard", "Logout"]
-choice = st.sidebar.selectbox("Navigation Menu", menu)
+# Logic: If the user is logged in, show 'Dashboard'. 
+# If not, only show 'Login' or 'Signup'.
+if st.session_state.user_token:
+    menu = ["Dashboard", "Logout"]
+else:
+    menu = ["Login", "Signup"]
+
+choice = st.sidebar.selectbox("Navigate System", menu)
 
 # ============================================================
-# 4. SIGNUP LOGIC (Creating an Account)
+# 4. SIGNUP MODULE
 # ============================================================
-
 if choice == "Signup":
-    st.subheader("New User Registration")
+    st.subheader("User Registration")
     
-    # We use st.form(clear_on_submit=True) to empty the input boxes after the button is clicked.
-    with st.form("signup_form", clear_on_submit=True):
-        email = st.text_input("Enter Email Address")
-        password = st.text_input("Create Password", type="password")
-        submit_btn = st.form_submit_button("Create My Account")
+    # 'clear_on_submit=True' ensures that the input fields reset after the 
+    # button is pressed, preventing duplicate entries or data leaking in the UI.
+    with st.form("reg_form", clear_on_submit=True):
+        email_input = st.text_input("Email Address")
+        pass_input = st.text_input("Password", type="password")
+        signup_btn = st.form_submit_button("Create Account")
         
-        if submit_btn:
-            if email and password:
-                try:
-                    # Logic: Call the Supabase Auth API
-                    result = signup_user(email, password)
-                    st.success("Registration Successful! Please switch to the Login page.")
-                except Exception as e:
-                    st.error(f"Signup Failed: {str(e)}")
-            else:
-                st.warning("Both Email and Password are required.")
+        if signup_btn:
+            try:
+                # Trigger the Auth API call
+                response = handle_signup(email_input, pass_input)
+                st.success("Account created successfully! Please proceed to Login.")
+            except Exception as e:
+                # Catches errors like 'User already exists' or 'Password too short'
+                st.error(f"Registration Failed: {e}")
 
 # ============================================================
-# 5. LOGIN LOGIC (Accessing the System)
+# 5. LOGIN MODULE
 # ============================================================
-
 elif choice == "Login":
-    st.subheader("Secure Login")
+    st.subheader("Secure Access")
     
-    with st.form("login_form", clear_on_submit=True):
-        email = st.text_input("Email")
-        password = st.text_input("Password", type="password")
-        login_btn = st.form_submit_button("Login")
+    with st.form("auth_form", clear_on_submit=True):
+        email_input = st.text_input("Email")
+        pass_input = st.text_input("Password", type="password")
+        login_btn = st.form_submit_button("Sign In")
         
         if login_btn:
             try:
-                # Logic: Validate with Supabase. 
-                # If this fails (wrong password), it jumps to 'except'.
-                result = login_user(email, password)
-                st.success("Login Successful! You can now view your Dashboard.")
+                # Authenticate and retrieve session data
+                auth_res = handle_login(email_input, pass_input)
+                
+                # Logic: We extract the unique ID (UUID) and save it to the Session State.
+                # This 'remembers' the user for the rest of their session.
+                st.session_state.user_token = auth_res.user
+                st.success("Logged in! Opening Dashboard...")
+                st.rerun() # Refresh page to show the Dashboard immediately
             except Exception as e:
-                # Common Error: 'Email not confirmed' if you haven't turned it off in Supabase.
-                st.error(f"Access Denied: {str(e)}")
+                st.error(f"Login Error: {e}")
 
 # ============================================================
-# 6. DASHBOARD (Bank Operations)
+# 6. DASHBOARD (BANKING CORE)
 # ============================================================
-
 elif choice == "Dashboard":
-    # Step 1: Check if anyone is logged in.
-    user_status = get_current_user()
+    # Security Check: Ensure a user object exists in memory
+    user = st.session_state.user_token
     
-    if not user_status or not user_status.user:
-        st.warning("Session Expired or Not Logged In. Please go to the Login page.")
+    if not user:
+        st.warning("No active session found. Please log in.")
     else:
-        # Step 2: Get the unique User ID (UUID) provided by Supabase Auth.
-        uid = user_status.user.id
+        # Step 1: Query the 'bank_accounts' table using the current User's ID.
+        # RLS policies in Supabase ensure you can only find YOUR row.
+        db_query = supabase.table("bank_accounts").select("*").eq("user_id", user.id).execute()
         
-        # Step 3: Fetch the row from 'bank_accounts' where 'user_id' matches this UID.
-        # This is where the 'Bank Data' lives.
-        db_response = supabase.table("bank_accounts").select("*").eq("user_id", uid).execute()
-        
-        # Scenario A: User is logged in but hasn't set up a 'Bank Profile' yet.
-        if not db_response.data:
-            st.info("No bank profile found for this email. Let's create one.")
-            with st.form("create_profile", clear_on_submit=True):
-                u_name = st.text_input("Full Legal Name")
-                u_age = st.number_input("Age", min_value=18)
-                u_acc = st.number_input("Preferred Account Number", step=1)
-                create_btn = st.form_submit_button("Open Account")
+        # Step 2: If the query returns nothing, the user hasn't created a 'Bank Profile'.
+        if not db_query.data:
+            st.info("New User detected. Please initialize your banking profile.")
+            with st.form("profile_setup", clear_on_submit=True):
+                full_name = st.text_input("Full Legal Name")
+                acc_num = st.number_input("Desired Account Number", min_value=1000, step=1)
+                init_btn = st.form_submit_button("Initialize Account")
                 
-                if create_btn:
-                    # Logic: Link the Auth User ID to this specific bank row.
+                if init_btn:
+                    # Logic: Insert new row linked to this User ID.
                     supabase.table("bank_accounts").insert({
-                        "user_id": uid,
-                        "name": u_name,
-                        "age": int(u_age),
-                        "account_number": int(u_acc),
-                        "balance": 500  # Minimum starting balance
+                        "user_id": user.id,
+                        "name": full_name,
+                        "account_number": int(acc_num),
+                        "balance": 500  # Default startup gift
                     }).execute()
-                    st.success("Bank Profile Created! Please refresh the page.")
+                    st.success("Account opened! Please refresh Dashboard.")
+                    st.rerun()
         
-        # Scenario B: Bank profile exists. Show Balance and Transaction options.
+        # Step 3: If data exists, display the Bank Account UI.
         else:
-            data = db_response.data[0] # Get the first (and only) row
-            st.success(f"Verified User: {data['name']}")
-            st.metric(label="Current Balance", value=f"₹ {data['balance']}")
-
-            # Transaction Form
-            with st.form("transaction_box", clear_on_submit=True):
-                amount = st.number_input("Enter Amount", min_value=1)
-                col1, col2 = st.columns(2)
+            account_data = db_query.data[0]
+            st.header(f"Welcome back, {account_data['name']}")
+            
+            # Display balance using a Metric widget for better visuals.
+            st.metric("Total Balance", f"₹ {account_data['balance']}")
+            
+            with st.form("transaction_form", clear_on_submit=True):
+                amount = st.number_input("Transaction Amount (₹)", min_value=1)
+                c1, c2 = st.columns(2)
                 
-                # Logic: Deposit adds to the current balance.
-                if col1.form_submit_button("Deposit"):
-                    new_bal = data['balance'] + amount
-                    supabase.table("bank_accounts").update({"balance": new_bal}).eq("id", data['id']).execute()
-                    st.rerun() # Refresh page to show new balance
-
-                # Logic: Withdraw checks if user has enough money first.
-                if col2.form_submit_button("Withdraw"):
-                    if amount > data['balance']:
+                if c1.form_submit_button("Deposit"):
+                    # Logic: Calculate new balance and update the cloud DB.
+                    updated_bal = account_data['balance'] + amount
+                    supabase.table("bank_accounts").update({"balance": updated_bal}).eq("id", account_data['id']).execute()
+                    st.success(f"Deposited ₹{amount}")
+                    st.rerun()
+                
+                if c2.form_submit_button("Withdraw"):
+                    # Logic: Validate that the user isn't withdrawing more than they have.
+                    if amount > account_data['balance']:
                         st.error("Insufficient Funds!")
                     else:
-                        new_bal = data['balance'] - amount
-                        supabase.table("bank_accounts").update({"balance": new_bal}).eq("id", data['id']).execute()
+                        updated_bal = account_data['balance'] - amount
+                        supabase.table("bank_accounts").update({"balance": updated_bal}).eq("id", account_data['id']).execute()
+                        st.success(f"Withdrew ₹{amount}")
                         st.rerun()
 
 # ============================================================
-# 7. LOGOUT (Safety)
+# 7. LOGOUT MODULE
 # ============================================================
-
 elif choice == "Logout":
-    # Clears the JWT token from the application memory.
+    # Step 1: Tell Supabase to invalidate the server-side session.
     supabase.auth.sign_out()
-    st.info("You have been securely logged out.")
-
+    # Step 2: Clear the local Session State memory.
+    st.session_state.user_token = None
+    st.info("Logged out successfully.")
+    st.rerun()
